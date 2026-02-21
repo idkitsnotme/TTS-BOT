@@ -1,6 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection } = require('@discordjs/voice');
-const discordTTS = require('discord-tts');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, getVoiceConnection } = require('@discordjs/voice');
 
 const client = new Client({
     intents: [
@@ -12,13 +11,9 @@ const client = new Client({
 });
 
 client.on('messageCreate', async (message) => {
-    // 1. Ignore other bots
-    if (message.author.bot) return;
+    if (message.author.bot || !message.content) return;
 
-    // 2. Find the person who typed the message
     const voiceChannel = message.member.voice.channel;
-
-    // 3. If the person is in a Voice Channel, the bot joins them
     if (voiceChannel) {
         try {
             const connection = joinVoiceChannel({
@@ -27,15 +22,20 @@ client.on('messageCreate', async (message) => {
                 adapterCreator: message.guild.voiceAdapterCreator,
             });
 
-            // 4. Generate and play the TTS
-            const stream = discordTTS.getVoiceStream(message.content);
-            const resource = createAudioResource(stream);
+            // Using a direct Google TTS URL (More stable than the package)
+            const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(message.content)}&tl=en&client=tw-ob`;
+            
+            const resource = createAudioResource(url);
             const player = createAudioPlayer();
 
             player.play(resource);
             connection.subscribe(player);
+
+            // LOGGING ERRORS (Check your Railway logs for these!)
+            player.on('error', error => console.error('Audio Player Error:', error.message));
+            
         } catch (error) {
-            console.error("Couldn't join or speak:", error);
+            console.error("Connection Error:", error);
         }
     }
 });
