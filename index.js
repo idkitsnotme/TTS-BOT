@@ -1,4 +1,3 @@
-// 1. FORCE FFmpeg Path immediately
 const ffmpegPath = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpegPath;
 
@@ -8,11 +7,13 @@ const {
     createAudioPlayer, 
     createAudioResource,
     AudioPlayerStatus,
-    StreamType
+    StreamType,
+    VoiceConnectionStatus,
+    entersState
 } = require('@discordjs/voice');
 
-// Load encryption
-require('sodium-native');
+// Load encryption wrappers
+const sodium = require('libsodium-wrappers');
 
 const client = new Client({
     intents: [
@@ -23,8 +24,10 @@ const client = new Client({
     ]
 });
 
-client.on('ready', () => {
-    console.log(`✅ ${client.user.tag} is ready to speak!`);
+client.on('ready', async () => {
+    // Wait for sodium to be ready before doing anything
+    await sodium.ready;
+    console.log(`✅ Encryption Ready. Logged in as ${client.user.tag}`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -41,27 +44,30 @@ client.on('messageCreate', async (message) => {
             selfDeaf: false,
         });
 
-        // Generate Audio URL
+        // CRITICAL: Wait for the connection to be ready with encryption
+        try {
+            await entersState(connection, VoiceConnectionStatus.Ready, 5000);
+        } catch (err) {
+            console.error("Connection failed to reach Ready state:", err);
+            return;
+        }
+
         const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(message.content)}`;
         
-        // 2. Specify the InputType as Arbitrary to force FFmpeg to process it
         const resource = createAudioResource(url, {
             inputType: StreamType.Arbitrary,
             inlineVolume: true
         });
-        resource.volume.setVolume(1.0);
 
         const player = createAudioPlayer();
         connection.subscribe(player);
         player.play(resource);
 
-        // --- TRACKING LOGS ---
-        player.on(AudioPlayerStatus.Playing, () => console.log('🔊 AUDIO START: Bot is actually sending sound.'));
-        player.on(AudioPlayerStatus.Idle, () => console.log('⏹️ AUDIO END: Player is now idle.'));
-        player.on('error', err => console.error('❌ PLAYER ERROR:', err.message));
+        player.on(AudioPlayerStatus.Playing, () => console.log('🔊 Playing...'));
+        player.on('error', err => console.error('❌ Player Error:', err.message));
 
     } catch (error) {
-        console.error("❌ CONNECTION ERROR:", error);
+        console.error("❌ Voice Error:", error);
     }
 });
 
