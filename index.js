@@ -1,82 +1,65 @@
-// 1. Force FFmpeg to load from the static package
 const ffmpegPath = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpegPath;
 
 const { Client, GatewayIntentBits } = require('discord.js');
 const { 
-    joinVoiceChannel, 
-    createAudioPlayer, 
-    createAudioResource,
-    AudioPlayerStatus,
-    StreamType,
-    generateDependencyReport 
+    joinVoiceChannel, createAudioPlayer, createAudioResource,
+    AudioPlayerStatus, StreamType, VoiceConnectionStatus, entersState
 } = require('@discordjs/voice');
-
-// Print diagnostic report on startup
-console.log("--- VOICE HEALTH REPORT ---");
-console.log(generateDependencyReport());
-console.log("---------------------------");
 
 const client = new Client({
     intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildVoiceStates
+        GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent, GatewayIntentBits.GuildVoiceStates
     ]
 });
 
+const PREFIX = '!say';
+
 client.on('ready', () => {
-    console.log(`✅ Texty is live as ${client.user.tag}`);
+    console.log(`✅ Texty is live! Using ${PREFIX} [message]`);
 });
 
 client.on('messageCreate', async (message) => {
-    // Ignore bots and messages without content
-    if (message.author.bot || !message.content) return;
+    if (message.author.bot || !message.content.startsWith(PREFIX)) return;
+
+    const args = message.content.slice(PREFIX.length).trim();
+    if (!args) return;
 
     const channel = message.member?.voice.channel;
-    
     if (channel) {
         try {
-            // 2. Connect with the 2026 Encryption Flag
             const connection = joinVoiceChannel({
                 channelId: channel.id,
                 guildId: message.guild.id,
                 adapterCreator: message.guild.voiceAdapterCreator,
                 selfDeaf: false,
-                // Some 2026 environments require this explicit flag
-                daveEncryption: true 
             });
 
-            // 3. Audio Source (StreamElements Brian)
-            const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(message.content)}`;
+            // WAIT FOR CONNECTION TO BE READY (CRITICAL FOR 2026)
+            await entersState(connection, VoiceConnectionStatus.Ready, 5000);
+
+            const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(args)}`;
             
-            // 4. Create resource with 'inlineVolume' to force a kickstart
+            // Generate resource
             const resource = createAudioResource(url, { 
                 inputType: StreamType.Arbitrary,
                 inlineVolume: true 
             });
 
-            // Set volume to 100% (1.0)
-            if (resource.volume) {
-                resource.volume.setVolume(1.0);
-            }
+            if (resource.volume) resource.volume.setVolume(1.0);
 
             const player = createAudioPlayer();
             connection.subscribe(player);
+            
+            // Play!
             player.play(resource);
 
-            // Logging for debugging
-            player.on(AudioPlayerStatus.Playing, () => {
-                console.log(`🔊 Speaking: "${message.content}"`);
-            });
-
-            player.on('error', err => {
-                console.error('❌ Audio Player Error:', err.message);
-            });
+            player.on(AudioPlayerStatus.Playing, () => console.log(`🔊 Speaking: "${args}"`));
+            player.on('error', err => console.error('❌ Audio Error:', err.message));
 
         } catch (error) {
-            console.error("❌ Connection Error:", error);
+            console.error("❌ Voice Error:", error);
         }
     }
 });
