@@ -1,3 +1,4 @@
+// Force the FFmpeg path for Railway
 process.env.FFMPEG_PATH = require('ffmpeg-static');
 
 const { Client, GatewayIntentBits } = require('discord.js');
@@ -5,17 +6,15 @@ const {
     joinVoiceChannel, 
     createAudioPlayer, 
     createAudioResource,
-    AudioPlayerStatus,
-    VoiceConnectionStatus,
-    entersState
+    AudioPlayerStatus
 } = require('@discordjs/voice');
 
-// This forces the encryption library to load immediately
+// This forces the encryption check immediately
 try {
-    require('libsodium');
-    console.log("✅ Encryption library loaded!");
+    require('sodium-native');
+    console.log("✅ Native Encryption (Sodium) is ACTIVE");
 } catch (e) {
-    console.error("❌ Encryption library failed to load:", e);
+    console.log("⚠️ Native Encryption not found, trying fallback...");
 }
 
 const client = new Client({
@@ -25,6 +24,10 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates
     ]
+});
+
+client.on('ready', () => {
+    console.log(`✅ Bot is live as ${client.user.tag}`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -41,11 +44,8 @@ client.on('messageCreate', async (message) => {
                 selfDeaf: false,
             });
 
-            // Wait until the connection is ready (prevents the AbortError)
-            await entersState(connection, VoiceConnectionStatus.Ready, 5_000);
-
-            const text = encodeURIComponent(message.content);
-            const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${text}`;
+            // Use StreamElements (Reliable)
+            const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(message.content)}`;
             
             const resource = createAudioResource(url);
             const player = createAudioPlayer();
@@ -53,7 +53,7 @@ client.on('messageCreate', async (message) => {
             connection.subscribe(player);
             player.play(resource);
 
-            player.on(AudioPlayerStatus.Playing, () => console.log('▶️ Speaking...'));
+            player.on(AudioPlayerStatus.Playing, () => console.log('▶️ Playing Audio...'));
             player.on('error', err => console.error('❌ Player Error:', err.message));
 
         } catch (error) {
