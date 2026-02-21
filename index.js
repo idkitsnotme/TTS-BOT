@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 const discordTTS = require('discord-tts');
 
 const client = new Client({
@@ -11,25 +11,23 @@ const client = new Client({
     ]
 });
 
-// Replace 'YOUR_BOT_TOKEN' with your actual token from the Discord Dev Portal
-const TOKEN = 'YOUR_BOT_TOKEN'; 
+// Railway will provide this from the "Variables" tab
+const TOKEN = process.env.TOKEN; 
 
 client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}! TTS is ready.`);
+    console.log(`Logged in as ${client.user.tag}! TTS is online.`);
 });
 
 client.on('messageCreate', async (message) => {
-    // Ignore bot messages
     if (message.author.bot) return;
 
-    // Trigger command (e.g., !say Hello)
+    // Command to trigger the TTS
     if (message.content.startsWith('!say ')) {
-        const text = message.content.slice(5);
+        const text = message.content.slice(5).trim();
         const voiceChannel = message.member.voice.channel;
 
-        if (!voiceChannel) {
-            return message.reply("You need to be in a voice channel for me to speak!");
-        }
+        if (!text) return message.reply("Please provide some text to say!");
+        if (!voiceChannel) return message.reply("Join a voice channel first!");
 
         try {
             const connection = joinVoiceChannel({
@@ -38,7 +36,7 @@ client.on('messageCreate', async (message) => {
                 adapterCreator: voiceChannel.guild.voiceAdapterCreator,
             });
 
-            // Generate the TTS stream
+            // Logic to play the TTS
             const stream = discordTTS.getVoiceStream(text);
             const resource = createAudioResource(stream);
             const player = createAudioPlayer();
@@ -46,16 +44,22 @@ client.on('messageCreate', async (message) => {
             player.play(resource);
             connection.subscribe(player);
 
-            player.on(AudioPlayerStatus.Idle, () => {
-                // Optional: Disconnect after speaking
-                // connection.destroy(); 
+            // Error handling for the player
+            player.on('error', error => {
+                console.error(`Error: ${error.message}`);
             });
 
         } catch (error) {
             console.error(error);
-            message.reply("I had trouble speaking that!");
+            message.reply("I had trouble joining the voice channel.");
         }
     }
 });
+
+// Use the environment variable to log in
+if (!TOKEN) {
+    console.error("ERROR: No TOKEN found in environment variables!");
+    process.exit(1);
+}
 
 client.login(TOKEN);
