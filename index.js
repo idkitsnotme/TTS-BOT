@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, getVoiceConnection } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection } = require('@discordjs/voice');
+const ffmpeg = require('ffmpeg-static'); // Add this line
 
 const client = new Client({
     intents: [
@@ -22,18 +23,21 @@ client.on('messageCreate', async (message) => {
                 adapterCreator: message.guild.voiceAdapterCreator,
             });
 
-            // Using a direct Google TTS URL (More stable than the package)
             const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(message.content)}&tl=en&client=tw-ob`;
             
-            const resource = createAudioResource(url);
+            // We tell the resource exactly where FFmpeg is
+            const resource = createAudioResource(url, {
+                inlineVolume: true
+            });
+            
             const player = createAudioPlayer();
-
             player.play(resource);
             connection.subscribe(player);
 
-            // LOGGING ERRORS (Check your Railway logs for these!)
-            player.on('error', error => console.error('Audio Player Error:', error.message));
-            
+            player.on('error', error => {
+                console.error('Player Error:', error.message);
+            });
+
         } catch (error) {
             console.error("Connection Error:", error);
         }
