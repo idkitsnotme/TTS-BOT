@@ -1,5 +1,4 @@
-const ffmpegPath = require('ffmpeg-static');
-process.env.FFMPEG_PATH = ffmpegPath;
+process.env.FFMPEG_PATH = require('ffmpeg-static');
 
 const { Client, GatewayIntentBits } = require('discord.js');
 const { 
@@ -7,11 +6,12 @@ const {
     createAudioPlayer, 
     createAudioResource,
     AudioPlayerStatus,
-    StreamType
+    StreamType,
+    generateDependencyReport
 } = require('@discordjs/voice');
 
-// Force tweetnacl to be the encryption provider
-require('tweetnacl');
+// This prints a health check of your encryption libraries in the logs
+console.log(generateDependencyReport());
 
 const client = new Client({
     intents: [
@@ -23,37 +23,30 @@ const client = new Client({
 });
 
 client.on('ready', () => {
-    console.log(`✅ Texty is online! Using ${process.version}`);
+    console.log(`✅ ${client.user.tag} is online!`);
 });
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.content) return;
 
-    const voiceChannel = message.member.voice.channel;
-    if (voiceChannel) {
-        try {
-            const connection = joinVoiceChannel({
-                channelId: voiceChannel.id,
-                guildId: message.guild.id,
-                adapterCreator: message.guild.voiceAdapterCreator,
-                selfDeaf: false,
-            });
+    const channel = message.member?.voice.channel;
+    if (channel) {
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: message.guild.id,
+            adapterCreator: message.guild.voiceAdapterCreator,
+        });
 
-            const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(message.content)}`;
-            
-            // We use 'arbitrary' to let FFmpeg handle the stream type automatically
-            const resource = createAudioResource(url, { inputType: StreamType.Arbitrary });
-            const player = createAudioPlayer();
-            
-            connection.subscribe(player);
-            player.play(resource);
+        // Using StreamElements (Brian voice)
+        const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(message.content)}`;
+        const resource = createAudioResource(url, { inputType: StreamType.Arbitrary });
+        const player = createAudioPlayer();
 
-            player.on(AudioPlayerStatus.Playing, () => console.log('🔊 Playing audio now...'));
-            player.on('error', err => console.error('❌ Player Error:', err.message));
+        connection.subscribe(player);
+        player.play(resource);
 
-        } catch (error) {
-            console.error("❌ Voice Error:", error);
-        }
+        player.on(AudioPlayerStatus.Playing, () => console.log('🔊 Playing...'));
+        player.on('error', err => console.error('❌ Player Error:', err.message));
     }
 });
 
