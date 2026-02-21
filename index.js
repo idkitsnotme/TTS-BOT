@@ -1,65 +1,55 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
+const { Client, GatewayIntentBits, SlashCommandBuilder } = require('discord.js');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection } = require('@discordjs/voice');
 const discordTTS = require('discord-tts');
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.MessageContent, // Allows reading messages
         GatewayIntentBits.GuildVoiceStates
     ]
 });
 
-// Railway will provide this from the "Variables" tab
-const TOKEN = process.env.TOKEN; 
-
-client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}! TTS is online.`);
+client.once('ready', async () => {
+    const commands = [
+        new SlashCommandBuilder().setName('join').setDescription('Join your voice channel'),
+        new SlashCommandBuilder().setName('leave').setDescription('Leave the voice channel'),
+    ].map(cmd => cmd.toJSON());
+    await client.application.commands.set(commands);
+    console.log('TTS Bot is Online!');
 });
 
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-
-    // Command to trigger the TTS
-    if (message.content.startsWith('!say ')) {
-        const text = message.content.slice(5).trim();
-        const voiceChannel = message.member.voice.channel;
-
-        if (!text) return message.reply("Please provide some text to say!");
-        if (!voiceChannel) return message.reply("Join a voice channel first!");
-
-        try {
-            const connection = joinVoiceChannel({
-                channelId: voiceChannel.id,
-                guildId: voiceChannel.guild.id,
-                adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-            });
-
-            // Logic to play the TTS
-            const stream = discordTTS.getVoiceStream(text);
-            const resource = createAudioResource(stream);
-            const player = createAudioPlayer();
-
-            player.play(resource);
-            connection.subscribe(player);
-
-            // Error handling for the player
-            player.on('error', error => {
-                console.error(`Error: ${error.message}`);
-            });
-
-        } catch (error) {
-            console.error(error);
-            message.reply("I had trouble joining the voice channel.");
-        }
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName === 'join') {
+        const channel = interaction.member.voice.channel;
+        if (!channel) return interaction.reply("Join a VC first!");
+        joinVoiceChannel({
+            channelId: channel.id,
+            guildId: interaction.guild.id,
+            adapterCreator: interaction.guild.voiceAdapterCreator,
+        });
+        await interaction.reply("I'm listening! Type anything in chat.");
+    }
+    if (interaction.commandName === 'leave') {
+        getVoiceConnection(interaction.guild.id)?.destroy();
+        await interaction.reply("Goodbye!");
     }
 });
 
-// Use the environment variable to log in
-if (!TOKEN) {
-    console.error("ERROR: No TOKEN found in environment variables!");
-    process.exit(1);
-}
+// AUTO-READ LOGIC (Matches your video)
+client.on('messageCreate', (message) => {
+    if (message.author.bot) return;
+    
+    const connection = getVoiceConnection(message.guild.id);
+    if (connection) {
+        const stream = discordTTS.getVoiceStream(message.content);
+        const resource = createAudioResource(stream);
+        const player = createAudioPlayer();
+        player.play(resource);
+        connection.subscribe(player);
+    }
+});
 
-client.login(TOKEN);
+client.login(process.env.TOKEN);
