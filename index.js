@@ -17,7 +17,7 @@ const client = new Client({
 const PREFIX = '!say';
 
 client.on('ready', () => {
-    console.log(`✅ Texty 2026 is Online. Command: ${PREFIX}`);
+    console.log(`✅ TEXTY IS ONLINE! Use ${PREFIX} [message]`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -27,7 +27,7 @@ client.on('messageCreate', async (message) => {
     if (!args) return;
 
     const channel = message.member?.voice.channel;
-    if (!channel) return;
+    if (!channel) return message.reply("Join a voice channel first!");
 
     try {
         const connection = joinVoiceChannel({
@@ -35,32 +35,26 @@ client.on('messageCreate', async (message) => {
             guildId: message.guild.id,
             adapterCreator: message.guild.voiceAdapterCreator,
             selfDeaf: false,
+            // 2026 Mandatory Encryption Flag
+            daveEncryption: true 
         });
 
-        // FORCE WAIT for the 2026 Encryption Handshake
+        // WAIT for the secure handshake to finish
         await entersState(connection, VoiceConnectionStatus.Ready, 5000);
 
         const player = createAudioPlayer();
         connection.subscribe(player);
 
-        // TTS URL
         const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(args)}`;
-        
-        // Use Arbitrary input type to let FFmpeg handle the 2026 bitrate requirements
-        const resource = createAudioResource(url, { 
-            inputType: StreamType.Arbitrary,
-            inlineVolume: true 
-        });
-
-        if (resource.volume) resource.volume.setVolume(1.0);
+        const resource = createAudioResource(url, { inputType: StreamType.Arbitrary });
 
         player.play(resource);
 
-        player.on(AudioPlayerStatus.Playing, () => console.log(`🔊 Audio Transmitting: "${args}"`));
+        player.on(AudioPlayerStatus.Playing, () => console.log(`🔊 Playing: ${args}`));
         player.on('error', err => console.error('❌ Audio Error:', err.message));
 
     } catch (error) {
-        console.error("❌ Voice Connection Failed:", error);
+        console.error("❌ Connection Failed:", error);
     }
 });
 
