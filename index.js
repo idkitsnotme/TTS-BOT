@@ -1,3 +1,5 @@
+process.env.FFMPEG_PATH = require('ffmpeg-static');
+
 const { Client, GatewayIntentBits } = require('discord.js');
 const { 
     joinVoiceChannel, 
@@ -6,9 +8,7 @@ const {
     VoiceConnectionStatus, 
     entersState 
 } = require('@discordjs/voice');
-
 const googleTTS = require('google-tts-api');
-const ffmpeg = require('ffmpeg-static'); // Forces Railway to use our installed audio engine
 
 const client = new Client({
     intents: [
@@ -24,14 +24,12 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', async (message) => {
-    // Ignore other bots and empty messages
     if (message.author.bot || !message.content) return;
 
     const voiceChannel = message.member.voice.channel;
     
     if (voiceChannel) {
         try {
-            // 1. Join the channel
             const connection = joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: message.guild.id,
@@ -39,13 +37,11 @@ client.on('messageCreate', async (message) => {
                 selfDeaf: false,
             });
 
-            // 2. Wait until the bot is 100% fully connected
             await entersState(connection, VoiceConnectionStatus.Ready, 5_000);
 
-            // 3. THE FIX: Wait 1 second so the audio socket doesn't "swallow" the start of the sentence
+            // 1-second delay so the audio socket has time to open
             setTimeout(() => {
                 try {
-                    // Generate a safe audio URL using the API
                     const url = googleTTS.getAudioUrl(message.content, {
                         lang: 'en',
                         slow: false,
@@ -55,7 +51,6 @@ client.on('messageCreate', async (message) => {
                     const resource = createAudioResource(url);
                     const player = createAudioPlayer();
                     
-                    // Subscribe the connection to the player BEFORE playing
                     connection.subscribe(player);
                     player.play(resource);
 
@@ -66,7 +61,7 @@ client.on('messageCreate', async (message) => {
                 } catch (err) {
                     console.error("TTS Generation Error:", err);
                 }
-            }, 1000); // 1000 milliseconds = 1 second
+            }, 1000);
 
         } catch (error) {
             console.error("Voice Connection Error:", error);
