@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection } = require('@discordjs/voice');
 const discordTTS = require('discord-tts');
 
@@ -6,49 +6,37 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent, // Allows reading messages
+        GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates
     ]
 });
 
-client.once('ready', async () => {
-    const commands = [
-        new SlashCommandBuilder().setName('join').setDescription('Join your voice channel'),
-        new SlashCommandBuilder().setName('leave').setDescription('Leave the voice channel'),
-    ].map(cmd => cmd.toJSON());
-    await client.application.commands.set(commands);
-    console.log('TTS Bot is Online!');
-});
-
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName === 'join') {
-        const channel = interaction.member.voice.channel;
-        if (!channel) return interaction.reply("Join a VC first!");
-        joinVoiceChannel({
-            channelId: channel.id,
-            guildId: interaction.guild.id,
-            adapterCreator: interaction.guild.voiceAdapterCreator,
-        });
-        await interaction.reply("I'm listening! Type anything in chat.");
-    }
-    if (interaction.commandName === 'leave') {
-        getVoiceConnection(interaction.guild.id)?.destroy();
-        await interaction.reply("Goodbye!");
-    }
-});
-
-// AUTO-READ LOGIC (Matches your video)
-client.on('messageCreate', (message) => {
+client.on('messageCreate', async (message) => {
+    // 1. Ignore other bots
     if (message.author.bot) return;
-    
-    const connection = getVoiceConnection(message.guild.id);
-    if (connection) {
-        const stream = discordTTS.getVoiceStream(message.content);
-        const resource = createAudioResource(stream);
-        const player = createAudioPlayer();
-        player.play(resource);
-        connection.subscribe(player);
+
+    // 2. Find the person who typed the message
+    const voiceChannel = message.member.voice.channel;
+
+    // 3. If the person is in a Voice Channel, the bot joins them
+    if (voiceChannel) {
+        try {
+            const connection = joinVoiceChannel({
+                channelId: voiceChannel.id,
+                guildId: message.guild.id,
+                adapterCreator: message.guild.voiceAdapterCreator,
+            });
+
+            // 4. Generate and play the TTS
+            const stream = discordTTS.getVoiceStream(message.content);
+            const resource = createAudioResource(stream);
+            const player = createAudioPlayer();
+
+            player.play(resource);
+            connection.subscribe(player);
+        } catch (error) {
+            console.error("Couldn't join or speak:", error);
+        }
     }
 });
 
