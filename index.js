@@ -4,11 +4,19 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const { 
     joinVoiceChannel, 
     createAudioPlayer, 
-    createAudioResource, 
-    VoiceConnectionStatus, 
-    entersState 
+    createAudioResource,
+    AudioPlayerStatus,
+    VoiceConnectionStatus,
+    entersState
 } = require('@discordjs/voice');
-const googleTTS = require('google-tts-api');
+
+// This forces the encryption library to load immediately
+try {
+    require('libsodium');
+    console.log("✅ Encryption library loaded!");
+} catch (e) {
+    console.error("❌ Encryption library failed to load:", e);
+}
 
 const client = new Client({
     intents: [
@@ -17,10 +25,6 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates
     ]
-});
-
-client.on('ready', () => {
-    console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -37,34 +41,23 @@ client.on('messageCreate', async (message) => {
                 selfDeaf: false,
             });
 
+            // Wait until the connection is ready (prevents the AbortError)
             await entersState(connection, VoiceConnectionStatus.Ready, 5_000);
 
-            // 1-second delay so the audio socket has time to open
-            setTimeout(() => {
-                try {
-                    const url = googleTTS.getAudioUrl(message.content, {
-                        lang: 'en',
-                        slow: false,
-                        host: 'https://translate.google.com',
-                    });
-                    
-                    const resource = createAudioResource(url);
-                    const player = createAudioPlayer();
-                    
-                    connection.subscribe(player);
-                    player.play(resource);
+            const text = encodeURIComponent(message.content);
+            const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${text}`;
+            
+            const resource = createAudioResource(url);
+            const player = createAudioPlayer();
+            
+            connection.subscribe(player);
+            player.play(resource);
 
-                    player.on('error', error => {
-                        console.error('Audio Player Error:', error.message);
-                    });
-
-                } catch (err) {
-                    console.error("TTS Generation Error:", err);
-                }
-            }, 1000);
+            player.on(AudioPlayerStatus.Playing, () => console.log('▶️ Speaking...'));
+            player.on('error', err => console.error('❌ Player Error:', err.message));
 
         } catch (error) {
-            console.error("Voice Connection Error:", error);
+            console.error("❌ Voice Error:", error);
         }
     }
 });
