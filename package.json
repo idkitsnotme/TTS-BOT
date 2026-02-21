@@ -1,7 +1,6 @@
 {
   "name": "discord-tts-bot",
   "version": "1.0.0",
-  "description": "A TTS bot for Discord",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
