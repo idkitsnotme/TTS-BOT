@@ -17,7 +17,7 @@ const client = new Client({
 const PREFIX = '!say';
 
 client.on('ready', () => {
-    console.log(`✅ Texty is live! Using ${PREFIX} [message]`);
+    console.log(`✅ Texty 2026 is Online. Command: ${PREFIX}`);
 });
 
 client.on('messageCreate', async (message) => {
@@ -27,40 +27,40 @@ client.on('messageCreate', async (message) => {
     if (!args) return;
 
     const channel = message.member?.voice.channel;
-    if (channel) {
-        try {
-            const connection = joinVoiceChannel({
-                channelId: channel.id,
-                guildId: message.guild.id,
-                adapterCreator: message.guild.voiceAdapterCreator,
-                selfDeaf: false,
-            });
+    if (!channel) return;
 
-            // WAIT FOR CONNECTION TO BE READY (CRITICAL FOR 2026)
-            await entersState(connection, VoiceConnectionStatus.Ready, 5000);
+    try {
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: message.guild.id,
+            adapterCreator: message.guild.voiceAdapterCreator,
+            selfDeaf: false,
+        });
 
-            const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(args)}`;
-            
-            // Generate resource
-            const resource = createAudioResource(url, { 
-                inputType: StreamType.Arbitrary,
-                inlineVolume: true 
-            });
+        // FORCE WAIT for the 2026 Encryption Handshake
+        await entersState(connection, VoiceConnectionStatus.Ready, 5000);
 
-            if (resource.volume) resource.volume.setVolume(1.0);
+        const player = createAudioPlayer();
+        connection.subscribe(player);
 
-            const player = createAudioPlayer();
-            connection.subscribe(player);
-            
-            // Play!
-            player.play(resource);
+        // TTS URL
+        const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(args)}`;
+        
+        // Use Arbitrary input type to let FFmpeg handle the 2026 bitrate requirements
+        const resource = createAudioResource(url, { 
+            inputType: StreamType.Arbitrary,
+            inlineVolume: true 
+        });
 
-            player.on(AudioPlayerStatus.Playing, () => console.log(`🔊 Speaking: "${args}"`));
-            player.on('error', err => console.error('❌ Audio Error:', err.message));
+        if (resource.volume) resource.volume.setVolume(1.0);
 
-        } catch (error) {
-            console.error("❌ Voice Error:", error);
-        }
+        player.play(resource);
+
+        player.on(AudioPlayerStatus.Playing, () => console.log(`🔊 Audio Transmitting: "${args}"`));
+        player.on('error', err => console.error('❌ Audio Error:', err.message));
+
+    } catch (error) {
+        console.error("❌ Voice Connection Failed:", error);
     }
 });
 
