@@ -1,21 +1,18 @@
-// Force the FFmpeg path for Railway
-process.env.FFMPEG_PATH = require('ffmpeg-static');
+// 1. FORCE FFmpeg Path immediately
+const ffmpegPath = require('ffmpeg-static');
+process.env.FFMPEG_PATH = ffmpegPath;
 
 const { Client, GatewayIntentBits } = require('discord.js');
 const { 
     joinVoiceChannel, 
     createAudioPlayer, 
     createAudioResource,
-    AudioPlayerStatus
+    AudioPlayerStatus,
+    StreamType
 } = require('@discordjs/voice');
 
-// This forces the encryption check immediately
-try {
-    require('sodium-native');
-    console.log("✅ Native Encryption (Sodium) is ACTIVE");
-} catch (e) {
-    console.log("⚠️ Native Encryption not found, trying fallback...");
-}
+// Load encryption
+require('sodium-native');
 
 const client = new Client({
     intents: [
@@ -27,38 +24,44 @@ const client = new Client({
 });
 
 client.on('ready', () => {
-    console.log(`✅ Bot is live as ${client.user.tag}`);
+    console.log(`✅ ${client.user.tag} is ready to speak!`);
 });
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.content) return;
 
     const voiceChannel = message.member.voice.channel;
-    
-    if (voiceChannel) {
-        try {
-            const connection = joinVoiceChannel({
-                channelId: voiceChannel.id,
-                guildId: message.guild.id,
-                adapterCreator: message.guild.voiceAdapterCreator,
-                selfDeaf: false,
-            });
+    if (!voiceChannel) return;
 
-            // Use StreamElements (Reliable)
-            const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(message.content)}`;
-            
-            const resource = createAudioResource(url);
-            const player = createAudioPlayer();
-            
-            connection.subscribe(player);
-            player.play(resource);
+    try {
+        const connection = joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId: message.guild.id,
+            adapterCreator: message.guild.voiceAdapterCreator,
+            selfDeaf: false,
+        });
 
-            player.on(AudioPlayerStatus.Playing, () => console.log('▶️ Playing Audio...'));
-            player.on('error', err => console.error('❌ Player Error:', err.message));
+        // Generate Audio URL
+        const url = `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(message.content)}`;
+        
+        // 2. Specify the InputType as Arbitrary to force FFmpeg to process it
+        const resource = createAudioResource(url, {
+            inputType: StreamType.Arbitrary,
+            inlineVolume: true
+        });
+        resource.volume.setVolume(1.0);
 
-        } catch (error) {
-            console.error("❌ Voice Error:", error);
-        }
+        const player = createAudioPlayer();
+        connection.subscribe(player);
+        player.play(resource);
+
+        // --- TRACKING LOGS ---
+        player.on(AudioPlayerStatus.Playing, () => console.log('🔊 AUDIO START: Bot is actually sending sound.'));
+        player.on(AudioPlayerStatus.Idle, () => console.log('⏹️ AUDIO END: Player is now idle.'));
+        player.on('error', err => console.error('❌ PLAYER ERROR:', err.message));
+
+    } catch (error) {
+        console.error("❌ CONNECTION ERROR:", error);
     }
 });
 
